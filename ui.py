@@ -65,6 +65,8 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.tree.bind('<<TreeviewSelect>>', self.on_folder_select)
         self.populate_root_nodes()
         self.create_context_menu()
+        self.big_files = []
+        self.storage_summary = {}
         
         logging.info("Aplicação iniciada com sucesso.")
 
@@ -186,6 +188,12 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.old_files_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.old_files_tab, text=_("old_files_tab"))
 
+        self.big_files_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.big_files_tab, text=_("big_files_tab"))
+        self.summary_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.summary_tab, text=_("summary_tab"))
+
+
         self.lbl_status = ttk.Label(self.chart_tab, text=_("select_folder_prompt"), font=('Segoe UI', 14))
         self.lbl_status.pack(pady=50)
         self.fig_canvas = None
@@ -196,7 +204,101 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.create_file_list_table(self.files_tab)
         self.create_duplicates_table(self.duplicates_tab)
         self.create_old_files_table(self.old_files_tab)
+        self.create_big_files_table(self.big_files_tab)
+        self.create_summary_view(self.summary_tab)
+        
+        # Adicionar novo botão na barra de ações
+        self.btn_find_big_files = ttk.Button(action_frame, text=_("find_big_files"), command=self.start_big_files_search, state='disabled')
+        self.btn_find_big_files.pack(side='left', padx=5)
 
+    def create_big_files_table(self, parent_tab):
+        """Cria a tabela para exibir os maiores ficheiros."""
+        frame = ttk.Frame(parent_tab)
+        frame.pack(fill='both', expand=True, padx=5, pady=5)
+        cols = (_("col_name"), _("col_size_mb"), _("col_mdate"), _("col_fullpath"))
+        self.big_files_tree = ttk.Treeview(frame, columns=cols, show='headings')
+        # ... (configuração das colunas e scrollbars igual a create_file_list_table) ...
+        self.big_files_tree.pack(fill='both', expand=True)
+
+    def create_summary_view(self, parent_tab):
+        """Cria a view para exibir as estatísticas de resumo."""
+        frame = ttk.Frame(parent_tab, padding=20)
+        frame.pack(fill='both', expand=True)
+
+        self.lbl_total_files = ttk.Label(frame, text="", font=self.FONT_LABEL)
+        self.lbl_total_files.pack(anchor='w', pady=5)
+
+        self.lbl_total_size = ttk.Label(frame, text="", font=self.FONT_LABEL)
+        self.lbl_total_size.pack(anchor='w', pady=5)
+
+        self.lbl_avg_size = ttk.Label(frame, text="", font=self.FONT_LABEL)
+        self.lbl_avg_size.pack(anchor='w', pady=5)
+
+        export_button = ttk.Button(frame, text=_("export_pdf"), command=self.export_to_pdf)
+        export_button.pack(anchor='w', pady=20)
+    # --- Funções de Progresso Determinístico ---
+    def set_determinate_progress(self, max_value):
+        self.progress_bar.config(mode='determinate', maximum=max_value, value=0)
+
+    def update_progress_value(self, value):
+        self.progress_bar['value'] = value
+
+    # --- Funções que iniciam as novas análises ---
+    def start_big_files_search(self):
+        path = self.current_path.get()
+        if not os.path.isdir(path): return
+        
+        top_n = simpledialog.askinteger(_("big_files_tab"), _("big_files_prompt"), initialvalue=50, minvalue=10, parent=self)
+        if not top_n: return
+
+        self.notebook.select(self.big_files_tab)
+        self.threaded_task(analysis.run_big_files_analysis, path, top_n)
+    
+    def export_to_pdf(self):
+        """Salva o gráfico como imagem e chama a função de exportação."""
+        if self.df_files.empty and self.df_folders.empty:
+            messagebox.showwarning("Aviso", "Não há dados para exportar. Faça uma análise primeiro.")
+            return
+
+        save_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Document", "*.pdf")])
+        if not save_path: return
+
+        chart_path = "temp_chart.png"
+        try:
+            # Salva o gráfico atual
+            if self.fig_canvas:
+                self.fig_canvas.figure.savefig(chart_path, facecolor=self.COLOR_BACKGROUND)
+            
+            # Chama a exportação
+            all_content = pd.concat([self.df_folders, self.df_files], ignore_index=True)
+            utils.export_report_pdf(all_content, chart_path, save_path, self.storage_summary)
+            
+            messagebox.showinfo(_("export_success_title"), _("export_success_message").format(path=save_path))
+
+        except Exception as e:
+            logging.error(f"Erro ao exportar PDF: {e}", exc_info=True)
+            messagebox.showerror(_("export_error_title"), _("export_error_message"))
+        finally:
+            # Limpa a imagem temporária
+            if os.path.exists(chart_path):
+                os.remove(chart_path)
+
+    # --- Funções de atualização das novas views ---
+    def update_big_files_view(self):
+        self.big_files_tree.delete(*self.big_files_tree.get_children())
+        for item in self.big_files:
+            name = os.path.basename(item['path'])
+            size_mb = item['size'] / (1024*1024)
+            mtime = datetime.fromtimestamp(item['mtime']).strftime('%Y-%m-%d %H:%M')
+            self.big_files_tree.insert("", "end", values=(name, f"{size_mb:,.2f}", mtime, item['path']))
+
+    def update_storage_summary_view(self):
+        summary = self.storage_summary
+        self.lbl_total_files.config(text=f"{_('total_files')} {summary.get('total_files', 0)}")
+        self.lbl_total_size.config(text=f"{_('total_size_gb')} {summary.get('total_size_gb', 0):.2f} GB")
+        self.lbl_avg_size.config(text=f"{_('avg_size_mb')} {summary.get('avg_size_mb', 0):.2f} MB")
+        
+        
     def create_filter_panel(self, parent_tab):
         filter_frame = ttk.LabelFrame(parent_tab, text=_("filters"), padding=10)
         filter_frame.pack(fill='x', padx=5, pady=5)
@@ -613,6 +715,9 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.lbl_status.config(text=_("analyzing").format(folder=os.path.basename(folder_path)))
         self.lbl_status.pack(pady=50)
         self.threaded_task(analysis.run_quick_analysis, folder_path)
+        self.threaded_task(analysis.run_quick_analysis, folder_path)
+        # Inicia o cálculo do resumo em paralelo
+        self.threaded_task(analysis.compute_storage_summary)
 
     def start_duplicate_search(self):
         path = self.current_path.get()

@@ -5,6 +5,17 @@ from typing import Dict
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "pt_PT": {
+        "big_files_tab": "Ficheiros Grandes",
+        "summary_tab": "Resumo",
+        "find_big_files": "Analisar Ficheiros Grandes",
+        "export_pdf": "Exportar para PDF",
+        "total_files": "Total de Ficheiros/Pastas:",
+        "total_size_gb": "Tamanho Total (GB):",
+        "avg_size_mb": "Tamanho Médio (MB):",
+        "old_files_prompt": "Identificar ficheiros não acedidos há mais de (dias):",
+        "big_files_prompt": "Número de ficheiros grandes a procurar:",
+        "report_title": "Relatório de Análise de Disco",
+        "category_other": "Outros",
         "title": "Analisador de Disco Pro",
         "nav_header": "Navegação",
         "nav_header_col": "Diretórios",
@@ -81,9 +92,20 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_videos": "Vídeos",
         "category_documents": "Documentos",
         "category_compressed": "Compactados",
-        "category_system": "Sistema/Exec."
+        "category_system": "Sistema/Exec.",
     },
     "en_US": {
+        "big_files_tab": "Big Files",
+        "summary_tab": "Summary",
+        "find_big_files": "Analyze Big Files",
+        "export_pdf": "Export to PDF",
+        "total_files": "Total Files/Folders:",
+        "total_size_gb": "Total Size (GB):",
+        "avg_size_mb": "Average Size (MB):",
+        "old_files_prompt": "Identify files not accessed for more than (days):",
+        "big_files_prompt": "Number of large files to find:",
+        "report_title": "Disk Analysis Report",
+        "category_other": "Other",
         "title": "Disk Analyzer Pro",
         "nav_header": "Navigation",
         "nav_header_col": "Directories",
@@ -160,9 +182,20 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_videos": "Videos",
         "category_documents": "Documents",
         "category_compressed": "Compressed",
-        "category_system": "System/Exec."
+        "category_system": "System/Exec.",
     },
     "es_AR": {
+        "big_files_tab": "Archivos Grandes",
+        "summary_tab": "Resumen",
+        "find_big_files": "Analizar Archivos Grandes",
+        "export_pdf": "Exportar a PDF",
+        "total_files": "Total de Archivos/Carpetas:",
+        "total_size_gb": "Tamaño Total (GB):",
+        "avg_size_mb": "Tamaño Promedio (MB):",
+        "old_files_prompt": "Identificar archivos no accedidos hace más de (días):",
+        "big_files_prompt": "Número de archivos grandes a buscar:",
+        "report_title": "Reporte de Análisis de Disco",
+        "category_other": "Otro",
         "title": "Analizador de Disco Pro",
         "nav_header": "Navegación",
         "nav_header_col": "Directorios",
@@ -239,7 +272,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_videos": "Videos",
         "category_documents": "Documentos",
         "category_compressed": "Comprimidos",
-        "category_system": "Sistema/Ejec."
+        "category_system": "Sistema/Ejec.",
     }
 }
 
