@@ -41,6 +41,9 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.df_folders = pd.DataFrame()
         self.duplicate_groups = []
         self.old_files = []
+        self.big_files = []
+        self.storage_summary = {}
+        
         self.current_path = tk.StringVar(value=_("select_folder_prompt"))
         self.filter_text_var = tk.StringVar()
         self.filter_min_size_var = tk.StringVar()
@@ -65,8 +68,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.tree.bind('<<TreeviewSelect>>', self.on_folder_select)
         self.populate_root_nodes()
         self.create_context_menu()
-        self.big_files = []
-        self.storage_summary = {}
         
         logging.info("Aplicação iniciada com sucesso.")
 
@@ -175,10 +176,14 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.btn_find_duplicates.pack(side='left', padx=(0,5))
         self.btn_find_old_files = ttk.Button(action_frame, text=_("find_old_files"), command=self.start_old_files_search, state='disabled')
         self.btn_find_old_files.pack(side='left')
+        self.btn_find_big_files = ttk.Button(action_frame, text=_("find_big_files"), command=self.start_big_files_search, state='disabled')
+        self.btn_find_big_files.pack(side='left', padx=5)
 
         self.notebook = ttk.Notebook(self.view_frame)
         self.notebook.pack(fill='both', expand=True, pady=5)
         
+        self.summary_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.summary_tab, text=_("summary_tab"))
         self.chart_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.chart_tab, text=_("chart_tab"))
         self.files_tab = ttk.Frame(self.notebook)
@@ -187,12 +192,8 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.notebook.add(self.duplicates_tab, text=_("duplicates_tab"))
         self.old_files_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.old_files_tab, text=_("old_files_tab"))
-
         self.big_files_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.big_files_tab, text=_("big_files_tab"))
-        self.summary_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.summary_tab, text=_("summary_tab"))
-
 
         self.lbl_status = ttk.Label(self.chart_tab, text=_("select_folder_prompt"), font=('Segoe UI', 14))
         self.lbl_status.pack(pady=50)
@@ -200,28 +201,14 @@ class FinalDiskAnalyzerApp(tk.Tk):
         
         self.progress_bar = ttk.Progressbar(self.view_frame, orient='horizontal', mode='indeterminate', style='custom.Horizontal.TProgressbar')
 
+        self.create_summary_view(self.summary_tab)
         self.create_filter_panel(self.files_tab)
         self.create_file_list_table(self.files_tab)
         self.create_duplicates_table(self.duplicates_tab)
         self.create_old_files_table(self.old_files_tab)
         self.create_big_files_table(self.big_files_tab)
-        self.create_summary_view(self.summary_tab)
-        
-        # Adicionar novo botão na barra de ações
-        self.btn_find_big_files = ttk.Button(action_frame, text=_("find_big_files"), command=self.start_big_files_search, state='disabled')
-        self.btn_find_big_files.pack(side='left', padx=5)
-
-    def create_big_files_table(self, parent_tab):
-        """Cria a tabela para exibir os maiores ficheiros."""
-        frame = ttk.Frame(parent_tab)
-        frame.pack(fill='both', expand=True, padx=5, pady=5)
-        cols = (_("col_name"), _("col_size_mb"), _("col_mdate"), _("col_fullpath"))
-        self.big_files_tree = ttk.Treeview(frame, columns=cols, show='headings')
-        # ... (configuração das colunas e scrollbars igual a create_file_list_table) ...
-        self.big_files_tree.pack(fill='both', expand=True)
 
     def create_summary_view(self, parent_tab):
-        """Cria a view para exibir as estatísticas de resumo."""
         frame = ttk.Frame(parent_tab, padding=20)
         frame.pack(fill='both', expand=True)
 
@@ -236,69 +223,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
 
         export_button = ttk.Button(frame, text=_("export_pdf"), command=self.export_to_pdf)
         export_button.pack(anchor='w', pady=20)
-    # --- Funções de Progresso Determinístico ---
-    def set_determinate_progress(self, max_value):
-        self.progress_bar.config(mode='determinate', maximum=max_value, value=0)
 
-    def update_progress_value(self, value):
-        self.progress_bar['value'] = value
-
-    # --- Funções que iniciam as novas análises ---
-    def start_big_files_search(self):
-        path = self.current_path.get()
-        if not os.path.isdir(path): return
-        
-        top_n = simpledialog.askinteger(_("big_files_tab"), _("big_files_prompt"), initialvalue=50, minvalue=10, parent=self)
-        if not top_n: return
-
-        self.notebook.select(self.big_files_tab)
-        self.threaded_task(analysis.run_big_files_analysis, path, top_n)
-    
-    def export_to_pdf(self):
-        """Salva o gráfico como imagem e chama a função de exportação."""
-        if self.df_files.empty and self.df_folders.empty:
-            messagebox.showwarning("Aviso", "Não há dados para exportar. Faça uma análise primeiro.")
-            return
-
-        save_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Document", "*.pdf")])
-        if not save_path: return
-
-        chart_path = "temp_chart.png"
-        try:
-            # Salva o gráfico atual
-            if self.fig_canvas:
-                self.fig_canvas.figure.savefig(chart_path, facecolor=self.COLOR_BACKGROUND)
-            
-            # Chama a exportação
-            all_content = pd.concat([self.df_folders, self.df_files], ignore_index=True)
-            utils.export_report_pdf(all_content, chart_path, save_path, self.storage_summary)
-            
-            messagebox.showinfo(_("export_success_title"), _("export_success_message").format(path=save_path))
-
-        except Exception as e:
-            logging.error(f"Erro ao exportar PDF: {e}", exc_info=True)
-            messagebox.showerror(_("export_error_title"), _("export_error_message"))
-        finally:
-            # Limpa a imagem temporária
-            if os.path.exists(chart_path):
-                os.remove(chart_path)
-
-    # --- Funções de atualização das novas views ---
-    def update_big_files_view(self):
-        self.big_files_tree.delete(*self.big_files_tree.get_children())
-        for item in self.big_files:
-            name = os.path.basename(item['path'])
-            size_mb = item['size'] / (1024*1024)
-            mtime = datetime.fromtimestamp(item['mtime']).strftime('%Y-%m-%d %H:%M')
-            self.big_files_tree.insert("", "end", values=(name, f"{size_mb:,.2f}", mtime, item['path']))
-
-    def update_storage_summary_view(self):
-        summary = self.storage_summary
-        self.lbl_total_files.config(text=f"{_('total_files')} {summary.get('total_files', 0)}")
-        self.lbl_total_size.config(text=f"{_('total_size_gb')} {summary.get('total_size_gb', 0):.2f} GB")
-        self.lbl_avg_size.config(text=f"{_('avg_size_mb')} {summary.get('avg_size_mb', 0):.2f} MB")
-        
-        
     def create_filter_panel(self, parent_tab):
         filter_frame = ttk.LabelFrame(parent_tab, text=_("filters"), padding=10)
         filter_frame.pack(fill='x', padx=5, pady=5)
@@ -363,7 +288,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.files_tree.bind("<Double-1>", self.on_double_click_item)
 
     def on_double_click_item(self, event):
-        """Chamado quando um item na lista de ficheiros detalhada é clicado duas vezes."""
         self.open_file_location()
 
     def create_duplicates_table(self, parent_tab):
@@ -406,6 +330,24 @@ class FinalDiskAnalyzerApp(tk.Tk):
         btn_frame.pack(fill='x', padx=5)
         self.btn_compress_old_files = ttk.Button(btn_frame, text=_("compress_selected"), command=self.compress_selected_old_files, state='disabled')
         self.btn_compress_old_files.pack(side='left', pady=5)
+
+    def create_big_files_table(self, parent_tab):
+        frame = ttk.Frame(parent_tab)
+        frame.pack(fill='both', expand=True, padx=5, pady=5)
+        cols = (_("col_name"), _("col_size_mb"), _("col_mdate"), _("col_fullpath"))
+        self.big_files_tree = ttk.Treeview(frame, columns=cols, show='headings')
+        for col in cols:
+            self.big_files_tree.heading(col, text=col)
+        self.big_files_tree.column(_("col_name"), width=250)
+        self.big_files_tree.column(_("col_size_mb"), anchor='e', width=120)
+        self.big_files_tree.column(_("col_mdate"), width=150)
+        self.big_files_tree.column(_("col_fullpath"), width=400)
+        v_scroll = ttk.Scrollbar(frame, orient="vertical", command=self.big_files_tree.yview)
+        h_scroll = ttk.Scrollbar(frame, orient="horizontal", command=self.big_files_tree.xview)
+        self.big_files_tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+        v_scroll.pack(side='right', fill='y')
+        h_scroll.pack(side='bottom', fill='x')
+        self.big_files_tree.pack(fill='both', expand=True)
         
     def create_context_menu(self):
         self.context_menu = tk.Menu(self, tearoff=0)
@@ -420,6 +362,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
         item_id = tree.identify_row(event.y)
         if item_id:
             tree.selection_set(item_id)
+            # Assume a coluna 4 (índice 3) é sempre o caminho completo
             item_path = tree.item(item_id)['values'][3]
             if os.path.isdir(item_path):
                 self.context_menu.entryconfig(_("open_file"), state="disabled")
@@ -505,13 +448,11 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.lbl_status.config(text=_("select_folder_prompt"))
         self.lbl_status.pack(pady=50)
         self.clear_filters()
-        for tree in [self.files_tree, self.duplicates_tree, self.old_files_tree]:
+        for tree in [self.files_tree, self.duplicates_tree, self.old_files_tree, self.big_files_tree]:
             tree.delete(*tree.get_children())
-        self.btn_find_duplicates.config(state='disabled')
-        self.btn_delete_duplicates.config(state='disabled')
-        self.btn_export.config(state='disabled')
-        self.btn_find_old_files.config(state='disabled')
-        self.btn_compress_old_files.config(state='disabled')
+        # Desativar todos os botões de ação
+        for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files, self.btn_delete_duplicates, self.btn_compress_old_files, self.btn_export]:
+             if btn.winfo_exists(): btn.config(state='disabled')
 
     def apply_filters(self):
         unit = self.filter_unit_var.get()
@@ -577,6 +518,14 @@ class FinalDiskAnalyzerApp(tk.Tk):
             atime_str = datetime.fromtimestamp(item['atime']).strftime('%Y-%m-%d')
             self.old_files_tree.insert("", "end", values=(item['path'], f"{size_mb:,.2f}", atime_str), iid=item['path'])
 
+    def populate_big_files_table(self):
+        self.big_files_tree.delete(*self.big_files_tree.get_children())
+        for item in self.big_files:
+            name = os.path.basename(item['path'])
+            size_mb = item['size'] / (1024*1024)
+            mtime = datetime.fromtimestamp(item['mtime']).strftime('%Y-%m-%d %H:%M')
+            self.big_files_tree.insert("", "end", values=(name, f"{size_mb:,.2f}", mtime, item['path']))
+
     def delete_selected_duplicates(self):
         selected_items = self.duplicates_tree.selection()
         files_to_delete = [self.duplicates_tree.item(item)['values'][0].strip().replace("└─ ", "") for item in selected_items if self.duplicates_tree.parent(item)]
@@ -625,16 +574,14 @@ class FinalDiskAnalyzerApp(tk.Tk):
             return
         
         files_to_compress = [self.old_files_tree.item(iid)['values'][0] for iid in selected_iids]
-        self.threaded_task(self.run_compression_and_deletion, files_to_compress)
-
-    def run_compression_and_deletion(self, app_instance, file_list):
         save_path = filedialog.asksaveasfilename(defaultextension=".zip", filetypes=[("ZIP archive", "*.zip")])
-        if not save_path:
-             app_instance.after(0, self.set_ui_busy, False)
-             return
+        if not save_path: return
+        
+        self.threaded_task(self.run_compression_and_deletion, files_to_compress, save_path)
 
+    def run_compression_and_deletion(self, app_instance, file_list, zip_path):
         try:
-            with zipfile.ZipFile(save_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for file_path in file_list:
                     if os.path.exists(file_path):
                         zf.write(file_path, arcname=os.path.basename(file_path))
@@ -651,8 +598,33 @@ class FinalDiskAnalyzerApp(tk.Tk):
             app_instance.after(0, lambda: messagebox.showinfo(_("export_success_title"), success_msg))
             app_instance.after(0, app_instance.start_old_files_search)
         except Exception as e:
-            logging.error(f"Erro fatal durante a compressão para {save_path}", exc_info=True)
+            logging.error(f"Erro fatal durante a compressão para {zip_path}", exc_info=True)
             app_instance.after(0, lambda: messagebox.showerror(_("compress_error_title"), _("export_error_message")))
+
+    def export_to_pdf(self):
+        if self.df_files.empty and self.df_folders.empty:
+            messagebox.showwarning(_("delete_warning_title"), "Não há dados para exportar. Faça uma análise primeiro.")
+            return
+
+        save_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Document", "*.pdf")])
+        if not save_path: return
+
+        chart_path = "temp_chart.png"
+        try:
+            if self.fig_canvas:
+                self.fig_canvas.figure.savefig(chart_path, facecolor=self.COLOR_BACKGROUND, bbox_inches='tight')
+            
+            all_content = pd.concat([self.df_folders, self.df_files], ignore_index=True)
+            utils.export_report_pdf(all_content, chart_path, save_path, self.storage_summary)
+            
+            messagebox.showinfo(_("export_success_title"), _("export_success_message").format(path=save_path))
+
+        except Exception as e:
+            logging.error(f"Erro ao exportar PDF: {e}", exc_info=True)
+            messagebox.showerror(_("export_error_title"), _("export_error_message"))
+        finally:
+            if os.path.exists(chart_path):
+                os.remove(chart_path)
 
     def get_status_label(self):
         try:
@@ -666,6 +638,12 @@ class FinalDiskAnalyzerApp(tk.Tk):
         except tk.TclError:
             return self.lbl_status
 
+    def set_determinate_progress(self, max_value):
+        self.progress_bar.config(mode='determinate', maximum=max_value, value=0)
+
+    def update_progress_value(self, value):
+        self.progress_bar['value'] = value
+
     def set_ui_busy(self, is_busy: bool):
         cursor = "watch" if is_busy else ""
         self.config(cursor=cursor)
@@ -673,21 +651,30 @@ class FinalDiskAnalyzerApp(tk.Tk):
         
         if is_busy:
             self.tree.unbind("<<TreeviewSelect>>")
+            # Deixa a barra de progresso no modo indeterminado por padrão
+            self.progress_bar.config(mode='indeterminate')
         else:
             self.tree.bind("<<TreeviewSelect>>", self.on_folder_select)
             
-        for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_delete_duplicates, self.btn_compress_old_files, self.btn_export]:
+        # *** CORREÇÃO AQUI ***
+        # Adicionado o novo botão à lista de botões a serem geridos.
+        buttons_to_manage = [
+            self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files,
+            self.btn_delete_duplicates, self.btn_compress_old_files, self.btn_export
+        ]
+        for btn in buttons_to_manage:
             if btn.winfo_exists(): btn.config(state=state)
         
         if not is_busy and not os.path.isdir(self.current_path.get()):
-             for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_export]:
+             for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files, self.btn_export]:
                  if btn.winfo_exists(): btn.config(state='disabled')
             
         self.update_idletasks()
         
         if is_busy:
             self.progress_bar.pack(fill='x', padx=10, pady=5, side='bottom')
-            self.progress_bar.start(10)
+            if self.progress_bar['mode'] == 'indeterminate':
+                self.progress_bar.start(10)
         else:
             self.progress_bar.stop()
             self.progress_bar.pack_forget()
@@ -715,9 +702,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.lbl_status.config(text=_("analyzing").format(folder=os.path.basename(folder_path)))
         self.lbl_status.pack(pady=50)
         self.threaded_task(analysis.run_quick_analysis, folder_path)
-        self.threaded_task(analysis.run_quick_analysis, folder_path)
-        # Inicia o cálculo do resumo em paralelo
-        self.threaded_task(analysis.compute_storage_summary)
 
     def start_duplicate_search(self):
         path = self.current_path.get()
@@ -727,18 +711,29 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.threaded_task(analysis.run_duplicate_analysis, path)
 
     def start_old_files_search(self):
-        days = simpledialog.askinteger(_("old_files_tab"), _("searching_old_files").format(days='N'), initialvalue=180, minvalue=1, parent=self)
+        days_prompt = _("old_files_prompt") 
+        days = simpledialog.askinteger(_("old_files_found_title"), days_prompt, initialvalue=180, minvalue=1, parent=self)
         if not days: return
         path = self.current_path.get()
         if not os.path.isdir(path): return
         self.get_status_label().config(text=_("searching_old_files").format(days=days))
         self.notebook.select(self.old_files_tab)
         self.threaded_task(analysis.run_old_files_analysis, path, days)
+
+    def start_big_files_search(self):
+        path = self.current_path.get()
+        if not os.path.isdir(path): return
+        
+        top_n = simpledialog.askinteger(_("big_files_tab"), _("big_files_prompt"), initialvalue=50, minvalue=10, parent=self)
+        if not top_n: return
+
+        self.notebook.select(self.big_files_tab)
+        self.threaded_task(analysis.run_big_files_analysis, path, top_n)
         
     def update_quick_analysis_view(self):
-        self.btn_find_duplicates.config(state='normal')
-        self.btn_export.config(state='normal')
-        self.btn_find_old_files.config(state='normal')
+        # Ativa os botões de ação principais
+        for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files, self.btn_export]:
+             if btn.winfo_exists(): btn.config(state='normal')
         
         all_content = pd.concat([self.df_folders, self.df_files], ignore_index=True)
         if all_content.empty:
@@ -748,6 +743,8 @@ class FinalDiskAnalyzerApp(tk.Tk):
             
         self.apply_filters()
         self.update_pie_chart()
+        # Inicia o cálculo do resumo após a análise rápida
+        self.threaded_task(analysis.compute_storage_summary)
         
     def update_pie_chart(self):
         if self.fig_canvas:
@@ -815,7 +812,13 @@ class FinalDiskAnalyzerApp(tk.Tk):
             messagebox.showinfo(_("old_files_found_title"), _("old_files_found_message").format(count=len(self.old_files)))
         else:
             messagebox.showinfo(_("old_files_found_title"), _("no_old_files_found_message"))
+    
+    def update_big_files_view(self):
+        self.get_status_label().config(text="")
+        self.populate_big_files_table()
 
-if __name__ == "__main__":
-    app = FinalDiskAnalyzerApp()
-    app.mainloop()
+    def update_storage_summary_view(self):
+        summary = self.storage_summary
+        self.lbl_total_files.config(text=f"{_('total_files')} {summary.get('total_files', 0)}")
+        self.lbl_total_size.config(text=f"{_('total_size_gb')} {summary.get('total_size_gb', 0):.2f} GB")
+        self.lbl_avg_size.config(text=f"{_('avg_size_mb')} {summary.get('avg_size_mb', 0):.2f} MB")
