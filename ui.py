@@ -33,11 +33,12 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.FONT_LABEL = ("Segoe UI", 11, "bold")
 
         # --- Configuração da Janela Principal ---
-        self.title("Analisador de Disco Pro - v9.0 Modular")
+        self.title("Analisador de Disco Pro - v9.1 Otimizado")
         self.geometry("1200x800")
         self.configure(background=self.COLOR_BACKGROUND)
 
         try:
+            # Tente usar um ícone, se disponível
             self.iconbitmap('app_icon.ico')
         except tk.TclError:
             logging.warning("Ficheiro 'app_icon.ico' não encontrado.")
@@ -104,11 +105,9 @@ class FinalDiskAnalyzerApp(tk.Tk):
         main_frame = ttk.Frame(self, padding=10)
         main_frame.pack(fill='both', expand=True)
         
-        # -- Layout Principal --
         self.paned_window = ttk.PanedWindow(main_frame, orient='horizontal')
         self.paned_window.pack(fill='both', expand=True)
 
-        # Painel Esquerdo: Navegação
         nav_frame = ttk.LabelFrame(self.paned_window, text="Navegação", padding=5)
         self.paned_window.add(nav_frame, weight=1)
         self.tree = ttk.Treeview(nav_frame, show="tree headings")
@@ -118,14 +117,12 @@ class FinalDiskAnalyzerApp(tk.Tk):
         tree_scrollbar.pack(side='right', fill='y')
         self.tree.pack(fill='both', expand=True)
         
-        # Painel Direito: Análise
         self.view_frame = ttk.Frame(self.paned_window)
         self.paned_window.add(self.view_frame, weight=3)
         self.create_view_panel()
         
     def create_view_panel(self):
         """Cria todos os widgets do painel direito."""
-        # Ações Principais
         action_frame = ttk.Frame(self.view_frame)
         action_frame.pack(fill='x', pady=5)
         ttk.Label(action_frame, text="Pasta Atual:", font=self.FONT_LABEL).pack(side='left')
@@ -137,7 +134,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.btn_find_old_files = ttk.Button(action_frame, text="Procurar Ficheiros Antigos", command=self.start_old_files_search, state='disabled')
         self.btn_find_old_files.pack(side='left')
 
-        # Abas de Resultados
         self.notebook = ttk.Notebook(self.view_frame)
         self.notebook.pack(fill='both', expand=True, pady=5)
         
@@ -154,7 +150,9 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.lbl_status.pack(pady=50)
         self.fig_canvas = None
         
-        # Conteúdo das abas
+        # **CORREÇÃO**: Inicializa a barra de progresso aqui, depois que 'view_frame' existe.
+        self.progress_bar = ttk.Progressbar(self.view_frame, orient='horizontal', mode='indeterminate', style='custom.Horizontal.TProgressbar')
+
         self.create_filter_panel(self.files_tab)
         self.create_file_list_table(self.files_tab)
         self.create_duplicates_table(self.duplicates_tab)
@@ -298,8 +296,8 @@ class FinalDiskAnalyzerApp(tk.Tk):
         try:
             tree = self.focus_get()
             if not isinstance(tree, ttk.Treeview): return
+            if not tree.selection(): return
             item_id = tree.selection()[0]
-            if not item_id: return
             
             values = tree.item(item_id)['values']
             item_path = values[0] if tree is self.tree else values[3]
@@ -318,8 +316,8 @@ class FinalDiskAnalyzerApp(tk.Tk):
         try:
             tree = self.focus_get()
             if tree is not self.files_tree: return
+            if not tree.selection(): return
             item_id = tree.selection()[0]
-            if not item_id: return
             
             file_path = tree.item(item_id)['values'][3]
             if os.path.isfile(file_path):
@@ -338,25 +336,22 @@ class FinalDiskAnalyzerApp(tk.Tk):
             drives = [f'{d}:\\' for d in string.ascii_uppercase if os.path.exists(f'{d}:')]
             for drive in drives:
                 node = self.tree.insert('', 'end', text=drive, values=[drive, 'drive'])
-                self.tree.insert(node, 'end') # Placeholder
+                self.tree.insert(node, 'end')
         else:
             root_node = self.tree.insert('', 'end', text="/", values=["/", 'folder'])
-            self.tree.insert(root_node, 'end') # Placeholder
+            self.tree.insert(root_node, 'end')
 
     def on_tree_open(self, event):
         parent_id = self.tree.focus()
         parent_path = self.tree.item(parent_id)['values'][0]
-        # Limpa os filhos placeholders
         self.tree.delete(*self.tree.get_children(parent_id))
         try:
             for item in os.listdir(parent_path):
                 full_path = os.path.join(parent_path, item)
                 if os.path.isdir(full_path):
                     try:
-                        # Verifica se o diretório é acessível
                         os.listdir(full_path) 
                         node = self.tree.insert(parent_id, 'end', text=item, values=[full_path, 'folder'])
-                        # Adiciona um placeholder para que o nó seja expansível
                         self.tree.insert(node, 'end') 
                     except PermissionError:
                         continue
@@ -389,8 +384,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
             return
 
         texto = self.filter_text_var.get().lower()
-        exts = []
-        [exts.extend(self.category_map[cat]) for cat, var in self.category_vars.items() if var.get()]
+        exts = [ext for cat, var in self.category_vars.items() if var.get() for ext in self.category_map[cat]]
         
         all_content = pd.concat([self.df_folders, self.df_files], ignore_index=True)
         if all_content.empty:
@@ -449,13 +443,15 @@ class FinalDiskAnalyzerApp(tk.Tk):
             messagebox.showwarning("Aviso", "Selecione os ficheiros individuais (não os grupos) a apagar.")
             return
         if messagebox.askyesno("Confirmar", f"Apagar permanentemente {len(files_to_delete)} ficheiros?"):
+            deleted_count = 0
             for file in files_to_delete:
                 try:
                     os.remove(file)
+                    deleted_count +=1
                 except Exception as e:
                     logging.error(f"Falha ao apagar ficheiro duplicado {file}", exc_info=True)
-            messagebox.showinfo("Concluído", f"{len(files_to_delete)} ficheiros apagados.")
-            self.on_folder_select(None) # Recarrega a vista
+            messagebox.showinfo("Concluído", f"{deleted_count} ficheiros apagados.")
+            self.start_duplicate_search()
 
     def export_to_excel(self):
         path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel", "*.xlsx")])
@@ -501,7 +497,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
         
         self.threaded_task(self.run_compression_and_deletion, files_to_compress, save_path)
 
-    def run_compression_and_deletion(self, file_list, zip_path):
+    def run_compression_and_deletion(self, app_instance, file_list, zip_path):
         try:
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for file_path in file_list:
@@ -514,15 +510,15 @@ class FinalDiskAnalyzerApp(tk.Tk):
                 try:
                     os.remove(file_path)
                     deleted_count += 1
-                except Exception:
+                except Exception as e:
                     logging.error(f"Falha ao apagar {file_path}", exc_info=True)
             logging.info(f"{deleted_count} de {len(file_list)} ficheiros originais apagados.")
 
-            self.after(0, lambda: messagebox.showinfo("Sucesso", f"{deleted_count} ficheiros foram comprimidos e arquivados."))
-            self.after(0, lambda: self.on_folder_select(None)) # Recarrega a vista
-        except Exception:
+            app_instance.after(0, lambda: messagebox.showinfo("Sucesso", f"{deleted_count} ficheiros foram comprimidos e arquivados."))
+            app_instance.after(0, app_instance.start_old_files_search)
+        except Exception as e:
             logging.error(f"Erro fatal durante a compressão para {zip_path}", exc_info=True)
-            self.after(0, lambda: messagebox.showerror("Erro de Compressão", "Ocorreu um erro. Verifique 'disk_analyzer.log'."))
+            app_instance.after(0, lambda: messagebox.showerror("Erro de Compressão", f"Ocorreu um erro. Verifique 'disk_analyzer.log'."))
 
     def get_status_label(self):
         try:
@@ -536,7 +532,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         except tk.TclError:
             return self.lbl_status
 
-    # --- FUNÇÕES DE GESTÃO DE THREADS E ESTADO DA UI ---
     def set_ui_busy(self, is_busy: bool) -> None:
         """Ativa/desativa a UI e muda o cursor durante operações longas."""
         cursor = "watch" if is_busy else ""
@@ -557,10 +552,17 @@ class FinalDiskAnalyzerApp(tk.Tk):
             
         self.update_idletasks()
         
+        # **CORREÇÃO**: Indentação correta para controlar a barra de progresso.
+        if is_busy:
+            self.progress_bar.pack(fill='x', padx=10, pady=5, side='bottom')
+            self.progress_bar.start(10)
+        else:
+            self.progress_bar.stop()
+            self.progress_bar.pack_forget()
+        
     def threaded_task(self, func, *args) -> None:
         """Wrapper para executar uma função numa thread com gestão de UI."""
         self.set_ui_busy(True)
-        # O primeiro argumento para as funções de análise é sempre a própria instância da app
         thread = threading.Thread(target=self.run_task_wrapper, args=(func, self, *args), daemon=True)
         thread.start()
 
@@ -574,7 +576,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         finally:
             self.after(0, self.set_ui_busy, False)
 
-    # --- FUNÇÕES DE EVENTOS QUE INICIAM AS ANÁLISES ---
     def on_folder_select(self, event) -> None:
         if not self.tree.selection(): return
         folder_id = self.tree.selection()[0]
@@ -583,7 +584,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.reset_view_state()
         self.lbl_status.pack(pady=50)
         self.lbl_status.config(text=f"Analisando '{os.path.basename(folder_path)}'...")
-        # Chama a função do módulo 'analysis'
         self.threaded_task(analysis.run_quick_analysis, folder_path)
 
     def start_duplicate_search(self) -> None:
@@ -591,7 +591,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         if not os.path.isdir(path): return
         self.get_status_label().config(text="Procurando duplicados...")
         self.notebook.select(self.duplicates_tab)
-        # Chama a função do módulo 'analysis'
         self.threaded_task(analysis.run_duplicate_analysis, path)
 
     def start_old_files_search(self) -> None:
@@ -601,10 +600,8 @@ class FinalDiskAnalyzerApp(tk.Tk):
         if not os.path.isdir(path): return
         self.get_status_label().config(text=f"Procurando ficheiros com mais de {days} dias...")
         self.notebook.select(self.old_files_tab)
-        # Chama a função do módulo 'analysis'
         self.threaded_task(analysis.run_old_files_analysis, path, days)
         
-    # --- FUNÇÕES DE ATUALIZAÇÃO DA UI (Callbacks) ---
     def update_quick_analysis_view(self):
         self.btn_find_duplicates.config(state='normal')
         self.btn_export.config(state='normal')
