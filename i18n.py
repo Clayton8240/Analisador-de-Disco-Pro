@@ -1,13 +1,280 @@
 # i18n.py
-TRANSLATIONS = {
-    "pt": {"File": "Ficheiro", "Analyze": "Analisar"},
-    "en": {"File": "File", "Analyze": "Analyze"}
-}
-LANG = "pt" # Pode ser alterado por uma configuração
-def _(text):
-    return TRANSLATIONS[LANG].get(text, text)
+import json
+import os
+from typing import Dict
 
-# No ui.py
-from i18n import _
-self.files_tab = ttk.Frame(self.notebook)
-self.notebook.add(self.files_tab, text=_("Detailed List"))
+TRANSLATIONS: Dict[str, Dict[str, str]] = {
+    "pt_PT": {
+        "title": "Analisador de Disco Pro",
+        "nav_header": "Navegação",
+        "nav_header_col": "Diretórios",
+        "current_folder": "Pasta Atual:",
+        "select_folder_prompt": "Selecione uma pasta na árvore de navegação",
+        "find_duplicates": "Procurar Duplicados",
+        "find_old_files": "Procurar Ficheiros Antigos",
+        "chart_tab": "Gráfico de Espaço",
+        "list_tab": "Lista Detalhada",
+        "duplicates_tab": "Duplicados",
+        "old_files_tab": "Ficheiros Antigos",
+        "preferences": "Preferências",
+        "language": "Idioma",
+        "theme": "Tema",
+        "light_theme": "Claro",
+        "dark_theme": "Escuro",
+        "lang_changed_title": "Idioma Alterado",
+        "lang_changed_message": "O idioma foi alterado. Por favor, reinicie a aplicação para que as alterações tenham efeito.",
+        "filters": "Filtros",
+        "filter_name_path": "Nome/Caminho:",
+        "filter_size": "Tamanho:",
+        "filter_categories": "Categorias:",
+        "apply_filters": "Aplicar Filtros",
+        "clear_filters": "Limpar",
+        "col_name": "Nome",
+        "col_size_mb": "Tamanho (MB)",
+        "col_mdate": "Data de Modificação",
+        "col_fullpath": "Caminho Completo",
+        "col_file_group": "Ficheiro / Grupo",
+        "col_last_access": "Último Acesso",
+        "delete_selected": "Apagar Selecionados",
+        "export_results": "Exportar Resultados",
+        "compress_selected": "Comprimir Selecionados para .zip",
+        "open_location": "Abrir Localização",
+        "open_file": "Abrir Ficheiro",
+        "open_folder": "Abrir Pasta",
+        "error_open_folder": "Não foi possível abrir a pasta:",
+        "error_open_file": "Não foi possível abrir o ficheiro:",
+        "error_value_title": "Erro de Valor",
+        "error_value_message": "Insira apenas números nos campos de tamanho.",
+        "delete_confirm_title": "Confirmar",
+        "delete_confirm_message": "Apagar permanentemente {count} ficheiros?",
+        "delete_warning_title": "Aviso",
+        "delete_warning_message": "Selecione os ficheiros individuais (não os grupos) a apagar.",
+        "delete_done_title": "Concluído",
+        "delete_done_message": "{count} ficheiros apagados.",
+        "export_success_title": "Sucesso",
+        "export_success_message": "Resultados exportados para:\n{path}",
+        "export_error_title": "Erro",
+        "export_error_message": "Erro ao exportar. Verifique 'disk_analyzer.log'.",
+        "compress_no_selection_title": "Nenhum Ficheiro",
+        "compress_no_selection_message": "Selecione os ficheiros a comprimir.",
+        "compress_confirm_title": "Confirmar Arquivamento",
+        "compress_confirm_message": "Comprimir {count} ficheiro(s) e APAGAR os originais?",
+        "compress_success_message": "{count} ficheiros foram comprimidos e arquivados.",
+        "compress_error_title": "Erro de Compressão",
+        "analyzing": "Analisando '{folder}'...",
+        "searching_duplicates": "Procurando duplicados...",
+        "searching_old_files": "Procurando ficheiros com mais de {days} dias...",
+        "empty_folder": "Pasta vazia ou sem conteúdo acessível.",
+        "chart_title": "Distribuição de Espaço em '{folder}'",
+        "chart_legend_title": "Conteúdo Principal",
+        "chart_others": "Outros",
+        "duplicates_found_title": "Duplicados Encontrados",
+        "duplicates_found_message": "Foram encontrados {count} grupos de ficheiros duplicados.",
+        "no_duplicates_title": "Nenhum Duplicado",
+        "no_duplicates_message": "Não foram encontrados ficheiros duplicados nesta pasta.",
+        "old_files_found_title": "Análise Concluída",
+        "old_files_found_message": "Foram encontrados {count} ficheiros não acedidos no período definido.",
+        "no_old_files_found_message": "Não foram encontrados ficheiros antigos neste diretório.",
+        "group_files": "Grupo {group_num} ({count} ficheiros)",
+        "category_images": "Imagens",
+        "category_music": "Música",
+        "category_videos": "Vídeos",
+        "category_documents": "Documentos",
+        "category_compressed": "Compactados",
+        "category_system": "Sistema/Exec."
+    },
+    "en_US": {
+        "title": "Disk Analyzer Pro",
+        "nav_header": "Navigation",
+        "nav_header_col": "Directories",
+        "current_folder": "Current Folder:",
+        "select_folder_prompt": "Select a folder in the navigation tree",
+        "find_duplicates": "Find Duplicates",
+        "find_old_files": "Find Old Files",
+        "chart_tab": "Space Chart",
+        "list_tab": "Detailed List",
+        "duplicates_tab": "Duplicates",
+        "old_files_tab": "Old Files",
+        "preferences": "Preferences",
+        "language": "Language",
+        "theme": "Theme",
+        "light_theme": "Light",
+        "dark_theme": "Dark",
+        "lang_changed_title": "Language Changed",
+        "lang_changed_message": "The language has been changed. Please restart the application for the changes to take effect.",
+        "filters": "Filters",
+        "filter_name_path": "Name/Path:",
+        "filter_size": "Size:",
+        "filter_categories": "Categories:",
+        "apply_filters": "Apply Filters",
+        "clear_filters": "Clear",
+        "col_name": "Name",
+        "col_size_mb": "Size (MB)",
+        "col_mdate": "Modification Date",
+        "col_fullpath": "Full Path",
+        "col_file_group": "File / Group",
+        "col_last_access": "Last Access",
+        "delete_selected": "Delete Selected",
+        "export_results": "Export Results",
+        "compress_selected": "Compress Selected to .zip",
+        "open_location": "Open Location",
+        "open_file": "Open File",
+        "open_folder": "Open Folder",
+        "error_open_folder": "Could not open the folder:",
+        "error_open_file": "Could not open the file:",
+        "error_value_title": "Value Error",
+        "error_value_message": "Please enter only numbers in the size fields.",
+        "delete_confirm_title": "Confirm",
+        "delete_confirm_message": "Permanently delete {count} files?",
+        "delete_warning_title": "Warning",
+        "delete_warning_message": "Select the individual files to delete, not the groups.",
+        "delete_done_title": "Done",
+        "delete_done_message": "{count} files deleted.",
+        "export_success_title": "Success",
+        "export_success_message": "Results exported to:\n{path}",
+        "export_error_title": "Error",
+        "export_error_message": "Error exporting. Check 'disk_analyzer.log'.",
+        "compress_no_selection_title": "No File",
+        "compress_no_selection_message": "Select the files to compress.",
+        "compress_confirm_title": "Confirm Archive",
+        "compress_confirm_message": "Compress {count} file(s) and DELETE the originals?",
+        "compress_success_message": "{count} files were compressed and archived.",
+        "compress_error_title": "Compression Error",
+        "analyzing": "Analyzing '{folder}'...",
+        "searching_duplicates": "Searching for duplicates...",
+        "searching_old_files": "Searching for files older than {days} days...",
+        "empty_folder": "Empty folder or no accessible content.",
+        "chart_title": "Space Distribution in '{folder}'",
+        "chart_legend_title": "Main Content",
+        "chart_others": "Others",
+        "duplicates_found_title": "Duplicates Found",
+        "duplicates_found_message": "{count} groups of duplicate files were found.",
+        "no_duplicates_title": "No Duplicates",
+        "no_duplicates_message": "No duplicate files were found in this folder.",
+        "old_files_found_title": "Analysis Complete",
+        "old_files_found_message": "{count} files not accessed in the defined period were found.",
+        "no_old_files_found_message": "No old files were found in this directory.",
+        "group_files": "Group {group_num} ({count} files)",
+        "category_images": "Images",
+        "category_music": "Music",
+        "category_videos": "Videos",
+        "category_documents": "Documents",
+        "category_compressed": "Compressed",
+        "category_system": "System/Exec."
+    },
+    "es_AR": {
+        "title": "Analizador de Disco Pro",
+        "nav_header": "Navegación",
+        "nav_header_col": "Directorios",
+        "current_folder": "Carpeta Actual:",
+        "select_folder_prompt": "Seleccione una carpeta en el árbol de navegación",
+        "find_duplicates": "Buscar Duplicados",
+        "find_old_files": "Buscar Archivos Antiguos",
+        "chart_tab": "Gráfico de Espacio",
+        "list_tab": "Lista Detallada",
+        "duplicates_tab": "Duplicados",
+        "old_files_tab": "Archivos Antiguos",
+        "preferences": "Preferencias",
+        "language": "Idioma",
+        "theme": "Tema",
+        "light_theme": "Claro",
+        "dark_theme": "Oscuro",
+        "lang_changed_title": "Idioma Cambiado",
+        "lang_changed_message": "El idioma ha sido cambiado. Por favor, reinicie la aplicación para que los cambios surtan efecto.",
+        "filters": "Filtros",
+        "filter_name_path": "Nombre/Ruta:",
+        "filter_size": "Tamaño:",
+        "filter_categories": "Categorías:",
+        "apply_filters": "Aplicar Filtros",
+        "clear_filters": "Limpiar",
+        "col_name": "Nombre",
+        "col_size_mb": "Tamaño (MB)",
+        "col_mdate": "Fecha de Modificación",
+        "col_fullpath": "Ruta Completa",
+        "col_file_group": "Archivo / Grupo",
+        "col_last_access": "Último Acceso",
+        "delete_selected": "Eliminar Seleccionados",
+        "export_results": "Exportar Resultados",
+        "compress_selected": "Comprimir Seleccionados a .zip",
+        "open_location": "Abrir Ubicación",
+        "open_file": "Abrir Archivo",
+        "open_folder": "Abrir Carpeta",
+        "error_open_folder": "No se pudo abrir la carpeta:",
+        "error_open_file": "No se pudo abrir el archivo:",
+        "error_value_title": "Error de Valor",
+        "error_value_message": "Ingrese solo números en los campos de tamaño.",
+        "delete_confirm_title": "Confirmar",
+        "delete_confirm_message": "¿Eliminar permanentemente {count} archivos?",
+        "delete_warning_title": "Aviso",
+        "delete_warning_message": "Seleccione los archivos individuales a eliminar, no los grupos.",
+        "delete_done_title": "Hecho",
+        "delete_done_message": "{count} archivos eliminados.",
+        "export_success_title": "Éxito",
+        "export_success_message": "Resultados exportados a:\n{path}",
+        "export_error_title": "Error",
+        "export_error_message": "Error al exportar. Verifique 'disk_analyzer.log'.",
+        "compress_no_selection_title": "Ningún Archivo",
+        "compress_no_selection_message": "Seleccione los archivos a comprimir.",
+        "compress_confirm_title": "Confirmar Archivación",
+        "compress_confirm_message": "¿Comprimir {count} archivo(s) y ELIMINAR los originales?",
+        "compress_success_message": "{count} archivos fueron comprimidos y archivados.",
+        "compress_error_title": "Error de Compresión",
+        "analyzing": "Analizando '{folder}'...",
+        "searching_duplicates": "Buscando duplicados...",
+        "searching_old_files": "Buscando archivos con más de {days} días...",
+        "empty_folder": "Carpeta vacía o sin contenido accesible.",
+        "chart_title": "Distribución de Espacio en '{folder}'",
+        "chart_legend_title": "Contenido Principal",
+        "chart_others": "Otros",
+        "duplicates_found_title": "Duplicados Encontrados",
+        "duplicates_found_message": "Se encontraron {count} grupos de archivos duplicados.",
+        "no_duplicates_title": "Sin Duplicados",
+        "no_duplicates_message": "No se encontraron archivos duplicados en esta carpeta.",
+        "old_files_found_title": "Análisis Completado",
+        "old_files_found_message": "Se encontraron {count} archivos no accedidos en el período definido.",
+        "no_old_files_found_message": "No se encontraron archivos antiguos en este directorio.",
+        "group_files": "Grupo {group_num} ({count} archivos)",
+        "category_images": "Imágenes",
+        "category_music": "Música",
+        "category_videos": "Videos",
+        "category_documents": "Documentos",
+        "category_compressed": "Comprimidos",
+        "category_system": "Sistema/Ejec."
+    }
+}
+
+# --- Lógica para gerir o idioma atual ---
+
+CONFIG_FILE = "app_config.json"
+current_language = "pt_PT"
+
+def load_language_setting():
+    """Carrega a configuração de idioma do ficheiro JSON."""
+    global current_language
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                current_language = config.get("language", "pt_PT")
+    except (IOError, json.JSONDecodeError):
+        current_language = "pt_PT"
+
+def save_language_setting(language: str):
+    """Salva a configuração de idioma no ficheiro JSON."""
+    config = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except (IOError, json.JSONDecodeError):
+            pass
+    
+    config["language"] = language
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=4)
+
+def get_text(key: str) -> str:
+    """Retorna o texto traduzido para a chave fornecida."""
+    return TRANSLATIONS.get(current_language, {}).get(key, key)
+
+load_language_setting()
