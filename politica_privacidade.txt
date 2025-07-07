@@ -1,0 +1,29 @@
+============================================================
+Política de Privacidade - Analisador de Disco Pro
+============================================================
+
+Data de vigência: 7 de julho de 2025
+
+Agradecemos por usar o Analisador de Disco Pro ("o Software"). A sua privacidade é importante para nós.
+
+1. Recolha de Informações
+--------------------------
+O Software opera inteiramente no seu computador local. Nós NÃO recolhemos, armazenamos ou transmitimos qualquer tipo de dado pessoal ou informação sobre os seus ficheiros para servidores externos. Toda a análise de disco é processada localmente e os resultados são guardados apenas no seu computador.
+
+2. Utilização das Informações
+------------------------------
+Como não recolhemos nenhuma informação pessoal, não há utilização de dados para fins de publicidade, análise de terceiros ou qualquer outro propósito.
+
+3. Ficheiro de Log (disk_analyzer.log)
+--------------------------------------
+O Software cria um ficheiro de log local chamado "disk_analyzer.log". Este ficheiro regista apenas informações técnicas sobre a execução do programa, como o início da aplicação, erros e avisos. Ele pode conter nomes de ficheiros e pastas do seu sistema, mas destina-se apenas a ajudar na depuração de problemas e não é partilhado com ninguém.
+
+4. Segurança
+------------
+Tomamos medidas para garantir que o Software seja seguro. No entanto, lembre-se de que nenhuma aplicação é 100% infalível. Utilize as funções de apagar e comprimir ficheiros com cuidado.
+
+5. Alterações a esta Política
+-----------------------------
+Podemos atualizar esta política de privacidade de tempos em tempos. Notificaremos sobre quaisquer alterações, publicando a nova política com a nova versão do Software.
+
+Ao instalar e usar este Software, você concorda com os termos desta Política de Privacidade.

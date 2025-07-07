@@ -22,9 +22,49 @@ import themes
 
 _ = i18n.get_text
 
+def resource_path(relative_path):
+    """ Devolve o caminho absoluto para o recurso, funciona para dev e para PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+# --- CLASSE PARA A SPLASH SCREEN ---
+class SplashScreen(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        
+        self.splash_image = tk.PhotoImage(file=resource_path("splash_screen.png"))
+        
+        width = self.splash_image.width()
+        height = self.splash_image.height()
+
+        self.overrideredirect(True)
+        
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width / 2) - (width / 2)
+        y = (screen_height / 2) - (height / 2)
+        self.geometry(f'{width}x{height}+{int(x)}+{int(y)}')
+
+        tk.Label(self, image=self.splash_image).pack()
+        s = ttk.Style()
+        s.configure("Splash.Horizontal.TProgressbar", background='#007ACC')
+        self.progress = ttk.Progressbar(self, orient="horizontal", style="Splash.Horizontal.TProgressbar", length=100, mode="indeterminate")
+        self.progress.pack(fill='x', padx=10, pady=10)
+        self.progress.start(10)
+
+        self.update()
+
+
 class FinalDiskAnalyzerApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.withdraw()
+
+        splash = SplashScreen(self)
         
         self.load_theme_colors()
 
@@ -33,10 +73,12 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.configure(background=self.COLOR_BACKGROUND)
 
         try:
-            self.iconbitmap('app_icon.ico')
+            icon_path = resource_path('app_icon.ico')
+            self.iconbitmap(icon_path)
         except tk.TclError:
-            logging.warning("Ficheiro 'app_icon.ico' não encontrado.")
+            logging.warning("Ficheiro 'app_icon.ico' não encontrado ou não pôde ser carregado.")
 
+        # *** CORREÇÃO AQUI: Bloco de variáveis movido para antes da criação da UI ***
         self.df_files = pd.DataFrame()
         self.df_folders = pd.DataFrame()
         self.duplicate_groups = []
@@ -58,10 +100,9 @@ class FinalDiskAnalyzerApp(tk.Tk):
             _("category_compressed"): ['.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.jar'],
             _("category_system"): ['.exe', '.dll', '.sys', '.ini', '.drv', '.bat', '.sh']
         }
-        
+
         self.create_menubar()
         self.create_interface()
-        
         self.setup_styles()
         
         self.tree.bind('<<TreeviewOpen>>', self.on_tree_open)
@@ -70,7 +111,11 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.create_context_menu()
         
         logging.info("Aplicação iniciada com sucesso.")
+        
+        splash.destroy()
+        self.deiconify()
 
+    # O resto do ficheiro ui.py permanece igual
     def load_theme_colors(self):
         colors = themes.get_theme_colors()
         self.COLOR_BACKGROUND = colors["BACKGROUND"]
@@ -362,7 +407,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         item_id = tree.identify_row(event.y)
         if item_id:
             tree.selection_set(item_id)
-            # Assume a coluna 4 (índice 3) é sempre o caminho completo
             item_path = tree.item(item_id)['values'][3]
             if os.path.isdir(item_path):
                 self.context_menu.entryconfig(_("open_file"), state="disabled")
@@ -450,7 +494,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.clear_filters()
         for tree in [self.files_tree, self.duplicates_tree, self.old_files_tree, self.big_files_tree]:
             tree.delete(*tree.get_children())
-        # Desativar todos os botões de ação
         for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files, self.btn_delete_duplicates, self.btn_compress_old_files, self.btn_export]:
              if btn.winfo_exists(): btn.config(state='disabled')
 
@@ -609,7 +652,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
         save_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Document", "*.pdf")])
         if not save_path: return
 
-        chart_path = "temp_chart.png"
+        chart_path = resource_path("temp_chart.png")
         try:
             if self.fig_canvas:
                 self.fig_canvas.figure.savefig(chart_path, facecolor=self.COLOR_BACKGROUND, bbox_inches='tight')
@@ -651,13 +694,10 @@ class FinalDiskAnalyzerApp(tk.Tk):
         
         if is_busy:
             self.tree.unbind("<<TreeviewSelect>>")
-            # Deixa a barra de progresso no modo indeterminado por padrão
             self.progress_bar.config(mode='indeterminate')
         else:
             self.tree.bind("<<TreeviewSelect>>", self.on_folder_select)
             
-        # *** CORREÇÃO AQUI ***
-        # Adicionado o novo botão à lista de botões a serem geridos.
         buttons_to_manage = [
             self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files,
             self.btn_delete_duplicates, self.btn_compress_old_files, self.btn_export
@@ -731,7 +771,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.threaded_task(analysis.run_big_files_analysis, path, top_n)
         
     def update_quick_analysis_view(self):
-        # Ativa os botões de ação principais
         for btn in [self.btn_find_duplicates, self.btn_find_old_files, self.btn_find_big_files, self.btn_export]:
              if btn.winfo_exists(): btn.config(state='normal')
         
@@ -743,7 +782,6 @@ class FinalDiskAnalyzerApp(tk.Tk):
             
         self.apply_filters()
         self.update_pie_chart()
-        # Inicia o cálculo do resumo após a análise rápida
         self.threaded_task(analysis.compute_storage_summary)
         
     def update_pie_chart(self):
