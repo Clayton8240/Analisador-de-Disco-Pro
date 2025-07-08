@@ -6,9 +6,7 @@ from typing import Optional, Dict
 import pandas as pd
 from fpdf import FPDF
 
-# *** CORREÇÃO AQUI ***
-# Importamos o módulo inteiro em vez de apenas a função,
-# para evitar problemas de dependência circular.
+# Importa a função de tradução para que este módulo também possa usá-la
 import i18n
 
 
@@ -43,8 +41,6 @@ def categorize_file(extension: str, category_map: Dict[str, list]) -> str:
     for category, exts in category_map.items():
         if ext_lower in exts:
             return category
-    # *** CORREÇÃO AQUI ***
-    # Chamada explícita à função de tradução
     return i18n.get_text("category_other")
 
 def export_report_pdf(dataframe: pd.DataFrame, chart_image_path: str, output_path: str, summary: Dict):
@@ -62,8 +58,6 @@ def export_report_pdf(dataframe: pd.DataFrame, chart_image_path: str, output_pat
             logging.warning("Ficheiro de fonte Arial.ttf não encontrado. A usar a fonte Helvetica como alternativa.")
             pdf.set_font("Helvetica", 'B', size=16)
 
-        # *** CORREÇÃO AQUI ***
-        # Todas as chamadas de tradução agora usam o prefixo 'i18n.'
         pdf.cell(0, 10, txt=i18n.get_text("report_title"), ln=True, align='C')
         pdf.ln(10)
 
@@ -84,15 +78,20 @@ def export_report_pdf(dataframe: pd.DataFrame, chart_image_path: str, output_pat
         pdf.set_font_size(8)
         
         pdf.cell(80, 8, i18n.get_text("col_name"), 1)
-        pdf.cell(30, 8, i18n.get_text("col_size_mb"), 1)
+        pdf.cell(30, 8, i18n.get_text("col_size_mb"), 1) # Cabeçalho já diz (GB)
         pdf.cell(80, 8, i18n.get_text("col_fullpath"), 1)
         pdf.ln()
 
         for _, row in dataframe.head(30).iterrows():
             name = row.get('name', 'N/A')[:45].encode('latin-1', 'replace').decode('latin-1')
             path = row.get('path', 'N/A')[:45].encode('latin-1', 'replace').decode('latin-1')
+            
+            # *** CORREÇÃO AQUI ***
+            # O cálculo agora é feito em Gigabytes (divisão por 1024**3)
+            size_in_gb = row.get('size', 0) / (1024**3)
+            
             pdf.cell(80, 8, name, 1)
-            pdf.cell(30, 8, f"{row.get('size', 0) / (1024*1024):.2f}", 1)
+            pdf.cell(30, 8, f"{size_in_gb:.4f}", 1) # Usando 4 casas decimais para mais precisão
             pdf.cell(80, 8, path, 1)
             pdf.ln()
 

@@ -78,7 +78,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
         except tk.TclError:
             logging.warning("Ficheiro 'app_icon.ico' não encontrado ou não pôde ser carregado.")
 
-        # *** CORREÇÃO AQUI: Bloco de variáveis movido para antes da criação da UI ***
+        
         self.df_files = pd.DataFrame()
         self.df_folders = pd.DataFrame()
         self.duplicate_groups = []
@@ -115,7 +115,7 @@ class FinalDiskAnalyzerApp(tk.Tk):
         splash.destroy()
         self.deiconify()
 
-    # O resto do ficheiro ui.py permanece igual
+    
     def load_theme_colors(self):
         colors = themes.get_theme_colors()
         self.COLOR_BACKGROUND = colors["BACKGROUND"]
@@ -318,8 +318,11 @@ class FinalDiskAnalyzerApp(tk.Tk):
         frame.pack(fill='both', expand=True, padx=5, pady=5)
         cols = (_("col_name"), _("col_size_mb"), _("col_mdate"), _("col_fullpath"))
         self.files_tree = ttk.Treeview(frame, columns=cols, show='headings')
+        
         for col in cols:
-            self.files_tree.heading(col, text=col)
+            self.files_tree.heading(col, text=col, command=lambda _col=col: self.sort_treeview_column(self.files_tree, _col, False))
+
+            
         self.files_tree.column(_("col_name"), width=250)
         self.files_tree.column(_("col_size_mb"), anchor='e', width=120)
         self.files_tree.column(_("col_mdate"), width=150)
@@ -331,6 +334,27 @@ class FinalDiskAnalyzerApp(tk.Tk):
         h_scroll.pack(side='bottom', fill='x')
         self.files_tree.pack(fill='both', expand=True)
         self.files_tree.bind("<Double-1>", self.on_double_click_item)
+
+    def sort_treeview_column(self, tv, col, reverse):
+        """
+        Ordena uma coluna da Treeview quando o seu cabeçalho é clicado.
+        """
+        try:
+            # Tenta obter os dados como números para uma ordenação numérica correta
+            l = [(float(tv.set(k, col)), k) for k in tv.get_children('')]
+        except ValueError:
+            # Se a conversão falhar (ex: texto), faz uma ordenação de strings
+            l = [(tv.set(k, col), k) for k in tv.get_children('')]
+
+        # Ordena a lista de dados
+        l.sort(reverse=reverse)
+
+        # Reorganiza os itens na Treeview
+        for index, (val, k) in enumerate(l):
+            tv.move(k, '', index)
+
+        # Inverte a direção da ordenação para o próximo clique
+        tv.heading(col, command=lambda: self.sort_treeview_column(tv, col, not reverse))       
 
     def on_double_click_item(self, event):
         self.open_file_location()
@@ -539,9 +563,10 @@ class FinalDiskAnalyzerApp(tk.Tk):
         self.files_tree.delete(*self.files_tree.get_children())
         for _, row in dataframe.iterrows():
             name = row['name']
-            size_mb = row['size'] / (1024*1024)
+            size_gb = row['size'] / (1024**3)
             mtime = datetime.fromtimestamp(row['mtime']).strftime('%Y-%m-%d %H:%M')
-            self.files_tree.insert("", "end", values=(name, f"{size_mb:,.2f}", mtime, row['path']))
+            self.files_tree.insert("", "end", values=(name, f"{size_gb:,.4f}", mtime, row['path']))
+
 
     def populate_duplicates_table(self):
         self.duplicates_tree.delete(*self.duplicates_tree.get_children())
