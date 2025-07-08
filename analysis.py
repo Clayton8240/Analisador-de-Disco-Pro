@@ -1,177 +1,142 @@
-# analysis.py
+# analysis.py (versão com varredura robusta)
 import os
 import time
 import logging
 import pandas as pd
 from tkinter import messagebox
 from typing import List, Dict, TYPE_CHECKING
-
-# Importa o módulo de internacionalização
 import i18n
 
 if TYPE_CHECKING:
     from ui import FinalDiskAnalyzerApp
 
-from utils import calculate_quick_hash, categorize_file
+from utils import calculate_quick_hash
+
 _ = i18n.get_text
 
-def run_quick_analysis(app: 'FinalDiskAnalyzerApp', path: str) -> None:
+def run_full_scan_and_analyze(app: 'FinalDiskAnalyzerApp', path: str, analyses: Dict[str, bool], params: Dict) -> None:
     """
-    Executa uma análise rápida de um diretório, listando ficheiros e pastas.
+    Função mestra que percorre o disco UMA VEZ usando o robusto os.walk,
+    recolhe os dados e depois executa as análises selecionadas em memória.
     """
-    folders_data, files_data = [], []
+    all_files_data = []
+    
     try:
-        # Pre-contagem para a barra de progresso
-        list_of_items = os.listdir(path)
-        app.after(0, app.set_determinate_progress, len(list_of_items))
+        logging.info(f"Iniciando varredura robusta em: {path}")
+        app.after(0, app.set_determinate_progress, 0) # Modo indeterminado
+
+        def handle_error(e):
+            """Função para ser chamada quando os.walk encontra um erro."""
+            logging.warning(f"Erro ao aceder a {e.filename}: {e.strerror}")
+
+        # --- ETAPA 1: PERCORRER O DISCO COM OS.WALK (ROBUSTO) ---
+        for dirpath, _, filenames in os.walk(path, onerror=handle_error):
+            for filename in filenames:
+                full_path = os.path.join(dirpath, filename)
+                try:
+                    stat = os.stat(full_path)
+                    all_files_data.append({
+                        "path": full_path,
+                        "name": filename,
+                        "size": stat.st_size,
+                        "mtime": stat.st_mtime,
+                        "atime": stat.st_atime,
+                        "ext": os.path.splitext(filename)[1].lower() or '.sem_extensao'
+                    })
+                except (PermissionError, FileNotFoundError) as e:
+                    logging.warning(f"Ignorando ficheiro {full_path}: {e}")
+                    continue
         
-        for i, item in enumerate(list_of_items):
-            item_path = os.path.join(path, item)
-            try:
-                mtime = os.path.getmtime(item_path)
-                _, ext = os.path.splitext(item)
-                ext = ext.lower() if ext else '.sem_extensao'
-                
-                if os.path.isdir(item_path):
-                    size = sum(os.path.getsize(os.path.join(dp, fn)) for dp, _, fns in os.walk(item_path, onerror=lambda e:None) for fn in fns)
-                    if size > 0:
-                        folders_data.append({'name': item, 'size': size, 'mtime': mtime, 'path': item_path, 'ext': ext})
-                else:
-                    size = os.path.getsize(item_path)
-                    if size > 0:
-                        files_data.append({'name': item, 'size': size, 'mtime': mtime, 'path': item_path, 'ext': ext})
-            except (PermissionError, FileNotFoundError) as e:
-                logging.warning(f"Ignorando item inacessível {item_path}: {e}")
-                continue
-            finally:
-                app.after(0, app.update_progress_value, i + 1)
+        logging.info(f"Varredura concluída. {len(all_files_data)} ficheiros encontrados.")
+        df_all_files = pd.DataFrame(all_files_data)
 
-    except PermissionError as e:
-        logging.error(f"Acesso negado ao ler o diretório {path}", exc_info=True)
-        app.after(0, lambda: messagebox.showerror(_("error_open_folder"), f"{_('error_open_folder')}\n{path}"))
+    except Exception as e:
+        logging.error(f"Erro fatal durante a varredura do disco: {e}", exc_info=True)
+        app.after(0, lambda: messagebox.showerror(_("export_error_title"), _("export_error_message")))
         return
+    
+    # --- ETAPA 2: EXECUTAR ANÁLISES EM MEMÓRIA ---
+    if not df_all_files.empty:
+        app.df_files = df_all_files[df_all_files['path'].apply(lambda p: os.path.dirname(p) == path)]
+        try:
+            folder_paths = [d.path for d in os.scandir(path) if d.is_dir()]
+            folder_data = []
+            for folder_path in folder_paths:
+                size = df_all_files[df_all_files['path'].str.startswith(folder_path)]['size'].sum()
+                if size > 0:
+                    try:
+                        stat = os.stat(folder_path)
+                        folder_data.append({
+                            'name': os.path.basename(folder_path), 'size': size,
+                            'mtime': stat.st_mtime, 'path': folder_path, 'ext': '.sem_extensao'
+                        })
+                    except (PermissionError, FileNotFoundError): continue
+            app.df_folders = pd.DataFrame(folder_data)
+        except (PermissionError, OSError) as e:
+            logging.warning(f"Não foi possível listar as subpastas de {path}: {e}")
+            app.df_folders = pd.DataFrame()
+    else:
+        app.df_files = pd.DataFrame()
+        app.df_folders = pd.DataFrame()
 
-    app.df_folders = pd.DataFrame(folders_data)
-    app.df_files = pd.DataFrame(files_data)
     app.after(0, app.update_quick_analysis_view)
 
+    if analyses.get("duplicates"): run_duplicate_analysis(app, df_all_files)
+    if analyses.get("old_files"): run_old_files_analysis(app, df_all_files, params.get("days_old", 180))
+    if analyses.get("big_files"): run_big_files_analysis(app, df_all_files, params.get("top_n", 50))
+    compute_storage_summary(app, df_all_files)
 
-def run_duplicate_analysis(app: 'FinalDiskAnalyzerApp', path: str) -> None:
-    """
-    Procura por ficheiros duplicados num diretório usando uma abordagem otimizada.
-    """
-    files_by_size: Dict[int, List[str]] = {}
-    all_files = [os.path.join(dp, f) for dp, dn, fn in os.walk(path, onerror=lambda e: logging.warning(f"Erro ao aceder a {e.filename}: {e.strerror}")) for f in fn]
-    
-    app.after(0, app.set_determinate_progress, len(all_files))
 
-    for i, file_path in enumerate(all_files):
-        try:
-            size = os.path.getsize(file_path)
-            if size > 1024:
-                if size not in files_by_size:
-                    files_by_size[size] = []
-                files_by_size[size].append(file_path)
-        except (PermissionError, FileNotFoundError):
-            continue
-        finally:
-            if i % 100 == 0:
-                app.after(0, app.update_progress_value, i)
-    
+def run_duplicate_analysis(app: 'FinalDiskAnalyzerApp', df: pd.DataFrame):
+    if df.empty:
+        logging.warning("DataFrame vazio passado para run_duplicate_analysis. A ignorar.")
+        app.duplicate_groups = []
+        app.after(0, app.update_duplicates_view); return
+    logging.info("Iniciando análise de duplicados em memória.")
+    files_by_size = df[df['size'] > 1024].groupby('size')['path'].apply(list).to_dict()
     app.duplicate_groups = []
     potential_dups = {s: files for s, files in files_by_size.items() if len(files) > 1}
-    
     for _, files in potential_dups.items():
         hashes: Dict[str, List[str]] = {}
         for file in files:
             h = calculate_quick_hash(file)
-            if h:
-                if h not in hashes:
-                    hashes[h] = []
-                hashes[h].append(file)
-        
+            if h: hashes.setdefault(h, []).append(file)
         for h, dup_files in hashes.items():
-            if len(dup_files) > 1:
-                app.duplicate_groups.append(dup_files)
-    
+            if len(dup_files) > 1: app.duplicate_groups.append(dup_files)
     app.after(0, app.update_duplicates_view)
 
-def run_old_files_analysis(app: 'FinalDiskAnalyzerApp', path: str, days: int) -> None:
-    """
-    Identifica ficheiros que não foram acedidos há mais de N dias.
-    """
+def run_old_files_analysis(app: 'FinalDiskAnalyzerApp', df: pd.DataFrame, days: int):
+    if df.empty:
+        logging.warning("DataFrame vazio passado para run_old_files_analysis. A ignorar.")
+        app.old_files = []
+        app.after(0, app.update_old_files_view); return
+    logging.info(f"Iniciando análise de ficheiros com mais de {days} dias em memória.")
     cutoff = time.time() - (days * 86400)
-    app.old_files = []
-    all_files = [os.path.join(dp, f) for dp, dn, fn in os.walk(path, onerror=lambda e: logging.warning(f"Erro ao aceder a {e.filename}: {e.strerror}")) for f in fn]
-
-    app.after(0, app.set_determinate_progress, len(all_files))
-
-    for i, full_path in enumerate(all_files):
-        try:
-            atime = os.path.getatime(full_path)
-            if atime < cutoff:
-                app.old_files.append({
-                    "path": full_path,
-                    "atime": atime,
-                    "size": os.path.getsize(full_path)
-                })
-        except Exception as e:
-            logging.warning(f"Não foi possível obter informações do ficheiro {full_path}: {e}")
-            continue
-        finally:
-            if i % 100 == 0:
-                app.after(0, app.update_progress_value, i)
-                
+    old_files_df = df[df['atime'] < cutoff]
+    app.old_files = old_files_df.to_dict('records')
     app.after(0, app.update_old_files_view)
 
-def run_big_files_analysis(app: 'FinalDiskAnalyzerApp', path: str, top_n: int = 50) -> None:
-    """
-    Identifica os N maiores ficheiros num diretório e subdiretórios.
-    """
-    files_info = []
-    all_files = [os.path.join(dp, f) for dp, dn, fn in os.walk(path) for f in fn]
-    
-    app.after(0, app.set_determinate_progress, len(all_files))
-    
-    for i, full_path in enumerate(all_files):
-        try:
-            size = os.path.getsize(full_path)
-            mtime = os.path.getmtime(full_path)
-            files_info.append({"path": full_path, "name": os.path.basename(full_path), "size": size, "mtime": mtime})
-        except (PermissionError, FileNotFoundError):
-            continue
-        finally:
-            if i % 100 == 0:
-                app.after(0, app.update_progress_value, i)
-    
-    files_info.sort(key=lambda x: x["size"], reverse=True)
-    app.big_files = files_info[:top_n]
-    
+def run_big_files_analysis(app: 'FinalDiskAnalyzerApp', df: pd.DataFrame, top_n: int):
+    if df.empty:
+        logging.warning("DataFrame vazio passado para run_big_files_analysis. A ignorar.")
+        app.big_files = []
+        app.after(0, app.update_big_files_view); return
+    logging.info(f"Iniciando análise dos {top_n} maiores ficheiros em memória.")
+    big_files_df = df.nlargest(top_n, 'size')
+    app.big_files = big_files_df.to_dict('records')
     app.after(0, app.update_big_files_view)
 
-def compute_storage_summary(app: 'FinalDiskAnalyzerApp') -> None:
-    """
-    Calcula e apresenta estatísticas resumidas do diretório atual.
-    """
-    # *** CORREÇÃO AQUI ***
-    # Chamada direta à função, sem o prefixo do módulo.
-    if app.df_folders.empty and app.df_files.empty:
-        run_quick_analysis(app, app.current_path.get())
-        return
-
-    all_content = pd.concat([app.df_folders, app.df_files], ignore_index=True)
-    if all_content.empty:
+def compute_storage_summary(app: 'FinalDiskAnalyzerApp', df: pd.DataFrame):
+    logging.info("Calculando resumo em memória.")
+    if df.empty:
         app.storage_summary = {}
-        app.after(0, app.update_storage_summary_view)
-        return
-
-    total_size = all_content['size'].sum()
-    count = all_content.shape[0]
-    avg_size = total_size / count if count else 0
-
-    app.storage_summary = {
-        "total_files": count,
-        "total_size_gb": total_size / (1024**3),
-        "avg_size_mb": avg_size / (1024**2)
-    }
+    else:
+        total_size = df['size'].sum()
+        count = len(df)
+        avg_size = total_size / count if count else 0
+        app.storage_summary = {
+            "total_files": count,
+            "total_size_gb": total_size / (1024**3),
+            "avg_size_mb": avg_size / (1024**2)
+        }
     app.after(0, app.update_storage_summary_view)

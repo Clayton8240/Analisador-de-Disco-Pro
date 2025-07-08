@@ -93,6 +93,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_documents": "Documentos",
         "category_compressed": "Compactados",
         "category_system": "Sistema/Exec.",
+        "start_scan": "Iniciar Varredura",
+        "folder_selected": "Pasta selecionada. Clique em 'Iniciar Varredura' para começar.",
+
     },
     "en_US": {
         "big_files_tab": "Big Files",
@@ -183,6 +186,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_documents": "Documents",
         "category_compressed": "Compressed",
         "category_system": "System/Exec.",
+        "start_scan": "Start Scan",
+        "folder_selected": "Folder selected. Click 'Start Scan' to begin.",
     },
     "es_AR": {
         "big_files_tab": "Archivos Grandes",
@@ -273,6 +278,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_documents": "Documentos",
         "category_compressed": "Comprimidos",
         "category_system": "Sistema/Ejec.",
+         "start_scan": "Iniciar Escaneo",
+        "folder_selected": "Carpeta seleccionada. Haga clic en 'Iniciar Escaneo' para comenzar.",
+
     }
 }
 
